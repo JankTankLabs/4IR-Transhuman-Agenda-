@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Architecture of Control — Complete Connection Map</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0c;
+      --bg-secondary: #111116;
+      --bg-tertiary: #18181f;
+      --text-primary: #e8e8ec;
+      --text-secondary: #9898a4;
+      --text-muted: #5a5a68;
+      --accent-ideology: #ff3366;
+      --accent-networks: #ff6b35;
+      --accent-people: #ffc233;
+      --accent-tech: #33ff99;
+      --accent-infrastructure: #33ccff;
+      --accent-endpoint: #cc33ff;
+      --connection-default: rgba(255,255,255,0.08);
+      --connection-active: rgba(255,255,255,0.4);
+      --glow-ideology: rgba(255,51,102,0.4);
+      --glow-networks: rgba(255,107,53,0.4);
+      --glow-people: rgba(255,194,51,0.4);
+      --glow-tech: rgba(51,255,153,0.4);
+      --glow-infrastructure: rgba(51,204,255,0.4);
+      --glow-endpoint: rgba(204,51,255,0.4);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background grid effect */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image: 
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3em;
+      margin-bottom: 24px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 32px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 8px 16px;
+      border-radius: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid transparent;
+    }
+
+    .legend-item:hover {
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .legend-item.active {
+      border-color: currentColor;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .legend-dot.ideology { background: var(--accent-ideology); box-shadow: 0 0 12px var(--glow-ideology); }
+    .legend-dot.networks { background: var(--accent-networks); box-shadow: 0 0 12px var(--glow-networks); }
+    .legend-dot.people { background: var(--accent-people); box-shadow: 0 0 12px var(--glow-people); }
+    .legend-dot.tech { background: var(--accent-tech); box-shadow: 0 0 12px var(--glow-tech); }
+    .legend-dot.infrastructure { background: var(--accent-infrastructure); box-shadow: 0 0 12px var(--glow-infrastructure); }
+    .legend-dot.endpoint { background: var(--accent-endpoint); box-shadow: 0 0 12px var(--glow-endpoint); }
+
+    /* Main map container */
+    .map-container {
+      position: relative;
+      width: 100%;
+      min-height: 2800px;
+    }
+
+    /* SVG for connections */
+    .connections-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .connection-line {
+      stroke: var(--connection-default);
+      stroke-width: 1;
+      fill: none;
+      transition: all 0.3s ease;
+    }
+
+    .connection-line.highlighted {
+      stroke: var(--connection-active);
+      stroke-width: 2;
+    }
+
+    .connection-line.flow {
+      stroke-dasharray: 8, 4;
+      animation: flowAnimation 20s linear infinite;
+    }
+
+    @keyframes flowAnimation {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -100; }
+    }
+
+    /* Layer sections */
+    .layer {
+      position: relative;
+      z-index: 2;
+      margin-bottom: 80px;
+    }
+
+    .layer-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--bg-tertiary);
+    }
+
+    .layer-number {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+    }
+
+    .layer-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+    }
+
+    .layer-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-style: italic;
+    }
+
+    /* Node grid */
+    .nodes-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    /* Node cards */
+    .node {
+      position: relative;
+      background: var(--bg-secondary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 200px;
+      max-width: 280px;
+      flex: 1 1 200px;
+    }
+
+    .node::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 8px 8px 0 0;
+      transition: all 0.3s ease;
+    }
+
+    .node.ideology::before { background: var(--accent-ideology); }
+    .node.networks::before { background: var(--accent-networks); }
+    .node.people::before { background: var(--accent-people); }
+    .node.tech::before { background: var(--accent-tech); }
+    .node.infrastructure::before { background: var(--accent-infrastructure); }
+    .node.endpoint::before { background: var(--accent-endpoint); }
+
+    .node:hover {
+      transform: translateY(-4px);
+      border-color: var(--text-muted);
+    }
+
+    .node.ideology:hover { box-shadow: 0 8px 32px var(--glow-ideology); }
+    .node.networks:hover { box-shadow: 0 8px 32px var(--glow-networks); }
+    .node.people:hover { box-shadow: 0 8px 32px var(--glow-people); }
+    .node.tech:hover { box-shadow: 0 8px 32px var(--glow-tech); }
+    .node.infrastructure:hover { box-shadow: 0 8px 32px var(--glow-infrastructure); }
+    .node.endpoint:hover { box-shadow: 0 8px 32px var(--glow-endpoint); }
+
+    .node.expanded {
+      max-width: 400px;
+    }
+
+    .node-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .node-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .node.ideology .node-icon { background: rgba(255,51,102,0.15); color: var(--accent-ideology); }
+    .node.networks .node-icon { background: rgba(255,107,53,0.15); color: var(--accent-networks); }
+    .node.people .node-icon { background: rgba(255,194,51,0.15); color: var(--accent-people); }
+    .node.tech .node-icon { background: rgba(51,255,153,0.15); color: var(--accent-tech); }
+    .node.infrastructure .node-icon { background: rgba(51,204,255,0.15); color: var(--accent-infrastructure); }
+    .node.endpoint .node-icon { background: rgba(204,51,255,0.15); color: var(--accent-endpoint); }
+
+    .node-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+
+    .node-subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .node-description {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .node-connections {
+      display: none;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--bg-tertiary);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .node.expanded .node-connections {
+      display: block;
+    }
+
+    .connection-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      margin: 2px;
+      border-radius: 3px;
+      background: var(--bg-tertiary);
+      font-size: 0.65rem;
+    }
+
+    .node-quote {
+      display: none;
+      font-size: 0.75rem;
+      font-style: italic;
+      color: var(--text-secondary);
+      padding: 12px;
+      background: var(--bg-primary);
+      border-radius: 6px;
+      margin-top: 12px;
+      border-left: 2px solid;
+    }
+
+    .node.ideology .node-quote { border-color: var(--accent-ideology); }
+    .node.networks .node-quote { border-color: var(--accent-networks); }
+    .node.people .node-quote { border-color: var(--accent-people); }
+    .node.tech .node-quote { border-color: var(--accent-tech); }
+    .node.infrastructure .node-quote { border-color: var(--accent-infrastructure); }
+    .node.endpoint .node-quote { border-color: var(--accent-endpoint); }
+
+    .node.expanded .node-quote {
+      display: block;
+    }
+
+    .quote-source {
+      display: block;
+      margin-top: 8px;
+      font-style: normal;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    /* Flow arrows */
+    .flow-indicator {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px 0;
+      position: relative;
+    }
+
+    .flow-arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+    }
+
+    .flow-arrow svg {
+      opacity: 0.4;
+      animation: pulseDown 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseDown {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50% { transform: translateY(4px); opacity: 0.8; }
+    }
+
+    /* Special emphasis nodes */
+    .node.primary {
+      border-width: 2px;
+    }
+
+    .node.primary.ideology { border-color: var(--accent-ideology); }
+    .node.primary.networks { border-color: var(--accent-networks); }
+    .node.primary.people { border-color: var(--accent-people); }
+    .node.primary.tech { border-color: var(--accent-tech); }
+    .node.primary.infrastructure { border-color: var(--accent-infrastructure); }
+    .node.primary.endpoint { border-color: var(--accent-endpoint); }
+
+    /* Info panel */
+    .info-panel {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 320px;
+      z-index: 100;
+      display: none;
+    }
+
+    .info-panel.active {
+      display: block;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .info-panel-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+
+    /* Thesis section */
+    .thesis-section {
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 60px;
+      text-align: center;
+    }
+
+    .thesis-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+    }
+
+    .thesis-text {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.4rem;
+      line-height: 1.6;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 60px 20px;
+      border-top: 1px solid var(--bg-tertiary);
+      margin-top: 60px;
+    }
+
+    .footer-text {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.8;
+    }
+
+    .footer-cta {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.5rem;
+      margin-top: 32px;
+      color: var(--text-secondary);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nodes-grid {
+        flex-direction: column;
+      }
+      
+      .node {
+        max-width: 100%;
+      }
+      
+      .legend {
+        gap: 12px;
+      }
+      
+      .legend-item {
+        font-size: 0.65rem;
+        padding: 6px 12px;
+      }
+    }
+
+    /* Connection matrix visualization */
+    .connection-matrix {
+      margin: 60px 0;
+      padding: 32px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--bg-tertiary);
+    }
+
+    .matrix-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.3rem;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .matrix-cell {
+      background: var(--bg-primary);
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid var(--bg-tertiary);
+    }
+
+    .matrix-cell-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .matrix-cell-content {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .matrix-arrow {
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="subtitle">The Trojan Dove Investigation</div>
+      <h1>The Architecture of Control</h1>
+      <p style="color: var(--text-secondary); max-width: 700px; margin: 0 auto; font-size: 0.9rem; line-height: 1.6;">
+        A comprehensive map connecting elite networks, technology companies, policy infrastructure, and transhumanist philosophy. Click any node for details.
+      </p>
+      
+      <div class="legend">
+        <div class="legend-item" data-filter="ideology">
+          <div class="legend-dot ideology"></div>
+          <span>Philosophy & Ideology</span>
+        </div>
+        <div class="legend-item" data-filter="networks">
+          <div class="legend-dot networks"></div>
+          <span>Elite Networks</span>
+        </div>
+        <div class="legend-item" data-filter="people">
+          <div class="legend-dot people"></div>
+          <span>Key Figures</span>
+        </div>
+        <div class="legend-item" data-filter="tech">
+          <div class="legend-dot tech"></div>
+          <span>Technology</span>
+        </div>
+        <div class="legend-item" data-filter="infrastructure">
+          <div class="legend-dot infrastructure"></div>
+          <span>Infrastructure</span>
+        </div>
+        <div class="legend-item" data-filter="endpoint">
+          <div class="legend-dot endpoint"></div>
+          <span>Endpoint</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Thesis -->
+    <div class="thesis-section">
+      <div class="thesis-title">The Central Thesis</div>
+      <div class="thesis-text">
+        Digital ID, CBDCs, biometric verification, and AI systems are not disconnected policy initiatives. They are <strong>prerequisite infrastructure</strong> for a stated goal: the technological transformation of humanity itself.
+      </div>
+    </div>
+
+    <div class="map-container">
+      <!-- LAYER 1: Philosophy & Ideology -->
+      <div class="layer" id="layer-ideology">
+        <div class="layer-header">
+          <span class="layer-number">Layer 01</span>
+          <span class="layer-title" style="color: var(--accent-ideology)">Philosophy & Ideology</span>
+          <span class="layer-subtitle">"Why they're building it"</span>
+        </div>
+        
+        <div class="nodes-grid">
+          <div class="node ideology primary" data-id="transhumanism">
+            <div class="node-header">
+              <div class="node-icon">◈</div>
+              <div>
+                <div class="node-title">Transhumanism</div>
+                <div class="node-subtitle">Core Philosophy</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Formal movement viewing human nature as "work-in-progress" to be technologically enhanced. Humans need not be evolution's endpoint.
+            </div>
+            <div class="node-quote">
+              "Transhumanists view human nature as a work-in-progress, a half-baked beginning that we can learn to remold in desirable ways. Current humanity need not be the endpoint of evolution."
+              <span class="quote-source">— The Transhumanist Declaration (1998)</span>
+            </div>
+            <div class="node-connections">
+              <strong>Connects to:</strong>
+              <span class="connection-tag">Nick Bostrom</span>
+              <span class="connection-tag">Fourth Industrial Revolution</span>
+              <span class="connection-tag">Neuralink</span>
+              <span class="connection-tag">OpenAI</span>
+            </div>
+          </div>
+
+          <div class="node ideology primary" data-id="4ir">
+            <div class="node-header">
+              <div class="node-icon">⬡</div>
+              <div>
+                <div class="node-title">Fourth Industrial Revolution</div>
+                <div class="node-subtitle">WEF Framework</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Klaus Schwab's framework describing fusion of physical, digital, and biological spheres. Published 2016, now WEF's operational mandate.
+            </div>
+            <div class="node-quote">
+              "It is characterized by a fusion of technologies that is blurring the lines between the physical, digital, and biological spheres."
+              <span class="quote-source">— Klaus Schwab, The Fourth Industrial Revolution (2016)</span>
+            </div>
+            <div class="node-connections">
+              <strong>Connects to:</strong>
+              <span class="connection-tag">Klaus Schwab</span>
+              <span class="connection-tag">WEF</span>
+              <span class="connection-tag">Digital ID</span>
+              <span class="connection-tag">Brain-Computer Interfaces</span>
+            </div>
+          </div>
+
+          <div class="node ideology" data-id="hackable">
+            <div class="node-header">
+              <div class="node-icon">⎔</div>
+              <div>
+                <div class="node-title">"Hackable Humans"</div>
+                <div class="node-subtitle">Philosophical Framework</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Harari's concept that humans are biological algorithms that can be decoded, predicted, and manipulated through sufficient data and computing power.
+            </div>
+            <div class="node-quote">
+              "We humans should get used to the idea that we are no longer mysterious souls — we are now hackable animals."
+              <span class="quote-source">— Yuval Noah Harari, Davos 2020</span>
+            </div>
+            <div class="node-connections">
+              <strong>Connects to:</strong>
+              <span class="connection-tag">Yuval Harari</span>
+              <span class="connection-tag">Biometric Systems</span>
+              <span class="connection-tag">AI Surveillance</span>
+              <span class="connection-tag">Predictive Control</span>
+            </div>
+          </div>
+
+          <div class="node ideology" data-id="useless-class">
+            <div class="node-header">
+              <div class="node-icon">◇</div>
+              <div>
+                <div class="node-title">"Useless Class" Theory</div>
+                <div class="node-subtitle">Population Framework</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Concept that AI automation will render most humans economically and politically irrelevant. Solution proposed: "drugs and computer games."
+            </div>
+            <div class="node-quote">
+              "What to do with all these useless people? At present, the best guess we have is to keep them happy with drugs and computer games."
+              <span class="quote-source">— Yuval Noah Harari</span>
+            </div>
+            <div class="node-connections">
+              <strong>Connects to:</strong>
+              <span class="connection-tag">Yuval Harari</span>
+              <span class="connection-tag">AI Automation</span>
+              <span class="connection-tag">UBI Programs</span>
+              <span class="connection-tag">Managed Population</span>
+            </div>
+          </div>
+
+          <div class="node ideology" data-id="great-reset">
+            <div class="node-header">
+              <div class="node-icon">⟲</div>
+              <div>
+                <div class="node-title">The Great Reset</div>
+                <div class="node-subtitle">WEF Initiative (2020)</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Post-COVID framework for restructuring global economics, governance, and social contracts. "Build Back Better" implementation vehicle.
+            </div>
+            <div class="node-quote">
+              "The pandemic represents a rare but narrow window of opportunity to reflect, reimagine, and reset our world."
+              <span class="quote-source">— Klaus Schwab, COVID-19: The Great Reset (2020)</span>
+            </div>
+            <div class="node-connections">
+              <strong>Connects to:</strong>
+              <span class="connection-tag">Klaus Schwab</span>
+              <span class="connection-tag">WEF</span>
+              <span class="connection-tag">Digital ID Rollout</span>
+              <span class="connection-tag">CBDC Timeline</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-indicator">
+        <div class="flow-arrow">
+          <span>Ideology shapes</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- LAYER 2: Elite Networks -->
+      <div class="layer" id="layer-networks">
+        <div class="layer-header">
+          <span class="layer-number">Layer 02</span>
+          <span class="layer-title" style="color: var(--accent-networks)">Elite Networks</span>
+          <span class="layer-subtitle">"Who coordinates it"</span>
+        </div>
+        
+        <div class="nodes-grid">
+          <div class="node networks primary" data-id="wef">
+            <div class="node-header">
+              <div class="node-icon">◉</div>
+              <div>
+                <div class="node-title">World Economic Forum</div>
+                <div class="node-subtitle">Founded 1971 | Geneva</div>
+              </div>
+            </div>
+            <div class="node-description">
+              International organization for public-private cooperation. 1,000+ member companies, annual Davos summit. Sets global policy agenda across government, tech, and finance.
+            </div>
+            <div class="node-connections">
+              <strong>Key Programs:</strong>
+              <span class="connection-tag">Young Global Leaders</span>
+              <span class="connection-tag">Global Shapers</span>
+              <span class="connection-tag">Known Traveller Digital Identity</span>
+              <span class="connection-tag">Great Reset Initiative</span>
+            </div>
+          </div>
+
+          <div class="node networks primary" data-id="ygl">
+            <div class="node-header">
+              <div class="node-icon">★</div>
+              <div>
+                <div class="node-title">Young Global Leaders</div>
+                <div class="node-subtitle">WEF Leadership Programme</div>
+              </div>
+            </div>
+            <div class="node-description">
+              5-year programme cultivating future leaders. Graduates include heads of state, tech CEOs, media executives. 1,400+ alumni in positions of power globally.
+            </div>
+            <div class="node-connections">
+              <strong>Notable Graduates:</strong>
+              <span class="connection-tag">Mark Zuckerberg (2009)</span>
+              <span class="connection-tag">Sam Altman (2015)</span>
+              <span class="connection-tag">Larry Page (2005)</span>
+              <span class="connection-tag">Sergey Brin (2002)</span>
+              <span class="connection-tag">Peter Thiel (2007)</span>
+              <span class="connection-tag">Emmanuel Macron</span>
+              <span class="connection-tag">Jacinda Ardern</span>
+            </div>
+          </div>
+
+          <div class="node networks" data-id="bilderberg">
+            <div class="node-header">
+              <div class="node-icon">▣</div>
+              <div>
+                <div class="node-title">Bilderberg Group</div>
+                <div class="node-subtitle">Founded 1954 | Annual Meetings</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Annual invitation-only conference. ~130 attendees from politics, finance, industry, media. Chatham House rules — no public disclosure of discussions.
+            </div>
+            <div class="node-connections">
+              <strong>Steering Committee:</strong>
+              <span class="connection-tag">Peter Thiel</span>
+              <span class="connection-tag">Eric Schmidt (former)</span>
+              <span class="connection-tag">Henry Kissinger (former)</span>
+            </div>
+          </div>
+
+          <div class="node networks" data-id="cfr">
+            <div class="node-header">
+              <div class="node-icon">◈</div>
+              <div>
+                <div class="node-title">Council on Foreign Relations</div>
+                <div class="node-subtitle">Founded 1921 | New York</div>
+              </div>
+            </div>
+            <div class="node-description">
+              US foreign policy think tank. 5,000+ members from government, finance, media, academia. Publishes Foreign Affairs journal. Shapes US foreign policy consensus.
+            </div>
+            <div class="node-connections">
+              <strong>Notable Members:</strong>
+              <span class="connection-tag">Dick Cheney</span>
+              <span class="connection-tag">Hillary Clinton</span>
+              <span class="connection-tag">Major media executives</span>
+            </div>
+          </div>
+
+          <div class="node networks" data-id="trilateral">
+            <div class="node-header">
+              <div class="node-icon">△</div>
+              <div>
+                <div class="node-title">Trilateral Commission</div>
+                <div class="node-subtitle">Founded 1973 | US-EU-Asia</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Forum fostering cooperation between North America, Europe, and Asia-Pacific. ~400 members from government, business, academia, media.
+            </div>
+            <div class="node-connections">
+              <strong>Co-founder:</strong>
+              <span class="connection-tag">David Rockefeller</span>
+              <span class="connection-tag">Zbigniew Brzezinski</span>
+            </div>
+          </div>
+
+          <div class="node networks" data-id="who">
+            <div class="node-header">
+              <div class="node-icon">✚</div>
+              <div>
+                <div class="node-title">WHO & Health Networks</div>
+                <div class="node-subtitle">Global Health Governance</div>
+              </div>
+            </div>
+            <div class="node-description">
+              International Health Regulations amendments, pandemic preparedness treaties. Digital health certificates, vaccine passports — infrastructure for health-linked digital ID.
+            </div>
+            <div class="node-connections">
+              <strong>Key Initiatives:</strong>
+              <span class="connection-tag">Pandemic Treaty</span>
+              <span class="connection-tag">IHR Amendments</span>
+              <span class="connection-tag">Digital Health Certificates</span>
+              <span class="connection-tag">GAVI Alliance</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-indicator">
+        <div class="flow-arrow">
+          <span>Networks place</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- LAYER 3: Key Figures -->
+      <div class="layer" id="layer-people">
+        <div class="layer-header">
+          <span class="layer-number">Layer 03</span>
+          <span class="layer-title" style="color: var(--accent-people)">Key Figures</span>
+          <span class="layer-subtitle">"Who designs and implements"</span>
+        </div>
+        
+        <div class="nodes-grid">
+          <div class="node people primary" data-id="schwab">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Klaus Schwab</div>
+                <div class="node-subtitle">WEF Founder & Executive Chairman</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Author of The Fourth Industrial Revolution (2016) and The Great Reset (2020). Architect of WEF's current framework. Founded YGL programme.
+            </div>
+            <div class="node-quote">
+              "The Fourth Industrial Revolution will challenge ideas about what it means to be human."
+              <span class="quote-source">— The Fourth Industrial Revolution (2016)</span>
+            </div>
+            <div class="node-connections">
+              <strong>Direct Connections:</strong>
+              <span class="connection-tag">WEF</span>
+              <span class="connection-tag">YGL</span>
+              <span class="connection-tag">Bilderberg</span>
+              <span class="connection-tag">All YGL graduates</span>
+            </div>
+          </div>
+
+          <div class="node people primary" data-id="harari">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Yuval Noah Harari</div>
+                <div class="node-subtitle">Historian / WEF Advisor</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Author of Sapiens, Homo Deus. Primary intellectual voice for WEF transhumanist framework. Keynote speaker Davos 2018, 2020. Articulates "hackable humans" concept.
+            </div>
+            <div class="node-quote">
+              "To hack a human being you need two things: a lot of computing power and a lot of data, especially biometric data."
+              <span class="quote-source">— Davos 2020</span>
+            </div>
+            <div class="node-connections">
+              <strong>Platforms:</strong>
+              <span class="connection-tag">WEF Davos</span>
+              <span class="connection-tag">Major Media</span>
+              <span class="connection-tag">TED</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="bostrom">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Nick Bostrom</div>
+                <div class="node-subtitle">Philosopher / Oxford</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Co-founded World Transhumanist Association. Director of Future of Humanity Institute. Author of Superintelligence (2014) — influenced Musk to co-found OpenAI.
+            </div>
+            <div class="node-connections">
+              <strong>Influence on:</strong>
+              <span class="connection-tag">OpenAI founding</span>
+              <span class="connection-tag">Elon Musk</span>
+              <span class="connection-tag">Effective Altruism</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="altman">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Sam Altman</div>
+                <div class="node-subtitle">OpenAI CEO | YGL 2015</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Leading development of artificial general intelligence. Also founder of Worldcoin — biometric digital ID using iris scans for universal identity.
+            </div>
+            <div class="node-connections">
+              <strong>Controls:</strong>
+              <span class="connection-tag">OpenAI / ChatGPT</span>
+              <span class="connection-tag">Worldcoin (iris biometrics)</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="zuckerberg">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Mark Zuckerberg</div>
+                <div class="node-subtitle">Meta CEO | YGL 2009</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Controls Facebook, Instagram, WhatsApp, Meta AI. 3+ billion users. Massive biometric and behavioral data collection. Metaverse/VR integration.
+            </div>
+            <div class="node-connections">
+              <strong>Controls:</strong>
+              <span class="connection-tag">Meta / Facebook</span>
+              <span class="connection-tag">Instagram</span>
+              <span class="connection-tag">WhatsApp</span>
+              <span class="connection-tag">Meta AI</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="brin-page">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Brin & Page</div>
+                <div class="node-subtitle">Google Founders | YGL 2002/2005</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Control Google Search (92% global market share), YouTube, Android, DeepMind AI. Primary gatekeepers of information access globally.
+            </div>
+            <div class="node-connections">
+              <strong>Controls:</strong>
+              <span class="connection-tag">Google Search</span>
+              <span class="connection-tag">YouTube</span>
+              <span class="connection-tag">Android</span>
+              <span class="connection-tag">DeepMind</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="thiel">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Peter Thiel</div>
+                <div class="node-subtitle">Palantir | YGL 2007 | Bilderberg</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Co-founded PayPal, Palantir. Bilderberg Steering Committee. Palantir provides predictive analytics to CIA, ICE, military. Early Facebook investor.
+            </div>
+            <div class="node-connections">
+              <strong>Controls:</strong>
+              <span class="connection-tag">Palantir</span>
+              <span class="connection-tag">Founders Fund</span>
+              <span class="connection-tag">Facebook board (former)</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="musk">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Elon Musk</div>
+                <div class="node-subtitle">Neuralink / OpenAI co-founder</div>
+              </div>
+            </div>
+            <div class="node-description">
+              First human brain chip implant (2024). Co-founded OpenAI. Controls X/Twitter, Starlink satellite internet. Listed YGL 2008 (disputed).
+            </div>
+            <div class="node-connections">
+              <strong>Controls:</strong>
+              <span class="connection-tag">Neuralink</span>
+              <span class="connection-tag">X / Twitter</span>
+              <span class="connection-tag">Starlink</span>
+              <span class="connection-tag">Tesla</span>
+            </div>
+          </div>
+
+          <div class="node people" data-id="maher">
+            <div class="node-header">
+              <div class="node-icon">👤</div>
+              <div>
+                <div class="node-title">Katherine Maher</div>
+                <div class="node-subtitle">NPR CEO | YGL 2019</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Former Wikimedia Foundation CEO (Wikipedia). Now NPR CEO. CFR member. Information gatekeeping across reference and public media.
+            </div>
+            <div class="node-connections">
+              <strong>Controls:</strong>
+              <span class="connection-tag">NPR</span>
+              <span class="connection-tag">Wikimedia (former)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-indicator">
+        <div class="flow-arrow">
+          <span>Key figures build</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- LAYER 4: Technology -->
+      <div class="layer" id="layer-tech">
+        <div class="layer-header">
+          <span class="layer-number">Layer 04</span>
+          <span class="layer-title" style="color: var(--accent-tech)">Technology</span>
+          <span class="layer-subtitle">"What they're building"</span>
+        </div>
+        
+        <div class="nodes-grid">
+          <div class="node tech primary" data-id="openai">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">OpenAI / ChatGPT</div>
+                <div class="node-subtitle">AGI Development</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Leading artificial general intelligence development. ChatGPT: 100M+ users. GPT-4 powers countless applications. Stated goal: beneficial AGI.
+            </div>
+            <div class="node-connections">
+              <strong>Implications:</strong>
+              <span class="connection-tag">Information mediation</span>
+              <span class="connection-tag">Reasoning systems</span>
+              <span class="connection-tag">Automation of cognition</span>
+            </div>
+          </div>
+
+          <div class="node tech primary" data-id="neuralink">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">Neuralink</div>
+                <div class="node-subtitle">Brain-Computer Interface</div>
+              </div>
+            </div>
+            <div class="node-description">
+              First human implant January 2024. Goal: "symbiosis with AI." Initial medical applications, long-term: cognitive augmentation for healthy humans.
+            </div>
+            <div class="node-connections">
+              <strong>Capabilities:</strong>
+              <span class="connection-tag">Neural data capture</span>
+              <span class="connection-tag">Brain-computer communication</span>
+              <span class="connection-tag">Cognitive enhancement</span>
+            </div>
+          </div>
+
+          <div class="node tech" data-id="palantir">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">Palantir</div>
+                <div class="node-subtitle">Predictive Analytics</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Government surveillance platform. Clients: CIA, ICE, military, police. Integrates disparate data sources for pattern recognition and prediction.
+            </div>
+            <div class="node-connections">
+              <strong>Government clients:</strong>
+              <span class="connection-tag">CIA</span>
+              <span class="connection-tag">ICE</span>
+              <span class="connection-tag">US Military</span>
+              <span class="connection-tag">UK NHS</span>
+            </div>
+          </div>
+
+          <div class="node tech" data-id="clearview">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">Clearview AI</div>
+                <div class="node-subtitle">Facial Recognition</div>
+              </div>
+            </div>
+            <div class="node-description">
+              30+ billion facial images scraped from internet. Used by 3,100+ law enforcement agencies. Identifies individuals from any photo.
+            </div>
+            <div class="node-connections">
+              <strong>Capabilities:</strong>
+              <span class="connection-tag">Mass facial recognition</span>
+              <span class="connection-tag">Real-time identification</span>
+              <span class="connection-tag">Historical tracking</span>
+            </div>
+          </div>
+
+          <div class="node tech" data-id="google-ai">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">Google / DeepMind</div>
+                <div class="node-subtitle">Search & AI Research</div>
+              </div>
+            </div>
+            <div class="node-description">
+              92% search market share. DeepMind: advanced AI research. YouTube: video information. Android: mobile OS. Maps: location tracking.
+            </div>
+            <div class="node-connections">
+              <strong>Data collection:</strong>
+              <span class="connection-tag">Search queries</span>
+              <span class="connection-tag">Location history</span>
+              <span class="connection-tag">Email content</span>
+              <span class="connection-tag">Voice recordings</span>
+            </div>
+          </div>
+
+          <div class="node tech" data-id="meta-ai">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">Meta Platforms</div>
+                <div class="node-subtitle">Social & Biometric Capture</div>
+              </div>
+            </div>
+            <div class="node-description">
+              3+ billion users across platforms. Facial recognition, behavioral tracking, social graph mapping. VR/AR integration (Quest, Ray-Ban Meta).
+            </div>
+            <div class="node-connections">
+              <strong>Data types:</strong>
+              <span class="connection-tag">Facial recognition</span>
+              <span class="connection-tag">Behavioral patterns</span>
+              <span class="connection-tag">Social connections</span>
+              <span class="connection-tag">Messaging content</span>
+            </div>
+          </div>
+
+          <div class="node tech" data-id="worldcoin">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">Worldcoin</div>
+                <div class="node-subtitle">Iris Biometric ID</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Sam Altman's project. Scans iris to create unique "World ID." Goal: verify humanness in AI age. Cryptocurrency reward for biometric submission.
+            </div>
+            <div class="node-connections">
+              <strong>Captures:</strong>
+              <span class="connection-tag">Iris biometrics</span>
+              <span class="connection-tag">Proof of personhood</span>
+              <span class="connection-tag">Global ID database</span>
+            </div>
+          </div>
+
+          <div class="node tech" data-id="mrna">
+            <div class="node-header">
+              <div class="node-icon">◆</div>
+              <div>
+                <div class="node-title">mRNA Technology</div>
+                <div class="node-subtitle">Biological Programming</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Moderna (YGL CEO Bancel), BioNTech, Pfizer. Technology to instruct cells to produce specific proteins. Potential for genetic modification at scale.
+            </div>
+            <div class="node-connections">
+              <strong>Applications:</strong>
+              <span class="connection-tag">Vaccines</span>
+              <span class="connection-tag">Gene therapy</span>
+              <span class="connection-tag">Cancer treatment</span>
+              <span class="connection-tag">Genetic modification</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-indicator">
+        <div class="flow-arrow">
+          <span>Technology enables</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- LAYER 5: Infrastructure -->
+      <div class="layer" id="layer-infrastructure">
+        <div class="layer-header">
+          <span class="layer-number">Layer 05</span>
+          <span class="layer-title" style="color: var(--accent-infrastructure)">Policy Infrastructure</span>
+          <span class="layer-subtitle">"The prerequisite systems"</span>
+        </div>
+        
+        <div class="nodes-grid">
+          <div class="node infrastructure primary" data-id="digital-id">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Digital ID Systems</div>
+                <div class="node-subtitle">Global Rollout 2024-2026</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Universal identification linking all activity to single profile. EU eIDAS 2.0 mandatory 2026, Australia Digital ID Act 2024, UK GOV.UK Wallet 2025.
+            </div>
+            <div class="node-connections">
+              <strong>Jurisdictions:</strong>
+              <span class="connection-tag">EU (eIDAS 2.0)</span>
+              <span class="connection-tag">Australia</span>
+              <span class="connection-tag">UK</span>
+              <span class="connection-tag">Canada</span>
+              <span class="connection-tag">India (Aadhaar)</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure primary" data-id="cbdc">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">CBDCs</div>
+                <div class="node-subtitle">Programmable Money</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Central Bank Digital Currencies. Digital Yuan (live), Digital Euro (development), Digital Pound (development). Enables: expiration, restrictions, behavioral conditions.
+            </div>
+            <div class="node-quote">
+              Bank of England discussion papers explicitly mention programmability: money that can be restricted by merchant, location, time, or behavior.
+              <span class="quote-source">— Bank of England CBDC Papers</span>
+            </div>
+            <div class="node-connections">
+              <strong>Capabilities:</strong>
+              <span class="connection-tag">Expiration dates</span>
+              <span class="connection-tag">Geographic restrictions</span>
+              <span class="connection-tag">Spending categories</span>
+              <span class="connection-tag">Behavioral conditions</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure" data-id="biometrics">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Biometric Verification</div>
+                <div class="node-subtitle">Biological Identification</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Facial recognition, fingerprints, iris scans, voice patterns. Embedded in devices (Face ID, fingerprint sensors), public infrastructure, and border control.
+            </div>
+            <div class="node-connections">
+              <strong>Deployment:</strong>
+              <span class="connection-tag">Smartphones</span>
+              <span class="connection-tag">Airports</span>
+              <span class="connection-tag">Payment systems</span>
+              <span class="connection-tag">Building access</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure" data-id="age-verification">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Age Verification</div>
+                <div class="node-subtitle">"Protect the Children"</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Australia, UK, EU laws requiring identity verification to access online content. Framed as child protection — creates universal internet ID infrastructure.
+            </div>
+            <div class="node-connections">
+              <strong>Legislation:</strong>
+              <span class="connection-tag">UK Online Safety Act</span>
+              <span class="connection-tag">Australia Social Media Ban</span>
+              <span class="connection-tag">EU Digital Services Act</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure" data-id="social-credit">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Social Credit / ESG</div>
+                <div class="node-subtitle">Behavioral Scoring</div>
+              </div>
+            </div>
+            <div class="node-description">
+              China: explicit social credit scores affecting travel, employment, services. West: ESG scores, content moderation, platform access restrictions.
+            </div>
+            <div class="node-connections">
+              <strong>Mechanisms:</strong>
+              <span class="connection-tag">China Social Credit</span>
+              <span class="connection-tag">ESG Scores</span>
+              <span class="connection-tag">Platform bans</span>
+              <span class="connection-tag">Financial deplatforming</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure" data-id="health-pass">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Health Passports</div>
+                <div class="node-subtitle">Medical Data Linking</div>
+              </div>
+            </div>
+            <div class="node-description">
+              COVID vaccine passports established precedent. WHO digital health certificates. Links medical status to identity, access, movement.
+            </div>
+            <div class="node-connections">
+              <strong>Precedents:</strong>
+              <span class="connection-tag">EU Digital COVID Certificate</span>
+              <span class="connection-tag">WHO Smart Vaccination</span>
+              <span class="connection-tag">CommonPass (WEF)</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure" data-id="content-moderation">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Content Moderation</div>
+                <div class="node-subtitle">Information Control</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Platform policies, government pressure, algorithmic suppression. "Misinformation" definitions controlled by platforms and government partnerships.
+            </div>
+            <div class="node-connections">
+              <strong>Mechanisms:</strong>
+              <span class="connection-tag">Fact-checking partnerships</span>
+              <span class="connection-tag">Shadow banning</span>
+              <span class="connection-tag">Search suppression</span>
+              <span class="connection-tag">Account termination</span>
+            </div>
+          </div>
+
+          <div class="node infrastructure" data-id="surveillance">
+            <div class="node-header">
+              <div class="node-icon">▤</div>
+              <div>
+                <div class="node-title">Surveillance Networks</div>
+                <div class="node-subtitle">Always-On Monitoring</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Ring doorbell police partnerships, smart home devices, CCTV integration, vehicle tracking, cell tower data. Ambient surveillance infrastructure.
+            </div>
+            <div class="node-connections">
+              <strong>Components:</strong>
+              <span class="connection-tag">Ring/Nest partnerships</span>
+              <span class="connection-tag">Smart speakers</span>
+              <span class="connection-tag">CCTV networks</span>
+              <span class="connection-tag">ANPR systems</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-indicator">
+        <div class="flow-arrow">
+          <span>Infrastructure delivers</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- LAYER 6: Endpoint -->
+      <div class="layer" id="layer-endpoint">
+        <div class="layer-header">
+          <span class="layer-number">Layer 06</span>
+          <span class="layer-title" style="color: var(--accent-endpoint)">The Endpoint</span>
+          <span class="layer-subtitle">"Where it leads"</span>
+        </div>
+        
+        <div class="nodes-grid">
+          <div class="node endpoint primary" data-id="predictive-control">
+            <div class="node-header">
+              <div class="node-icon">⬢</div>
+              <div>
+                <div class="node-title">Predictive Control</div>
+                <div class="node-subtitle">Pre-emptive Intervention</div>
+              </div>
+            </div>
+            <div class="node-description">
+              AI predicts behavior before it occurs. Pre-crime policing, risk scores determining access. Dissent modeled and neutralized through nudging before it manifests.
+            </div>
+            <div class="node-connections">
+              <strong>Mechanisms:</strong>
+              <span class="connection-tag">Pre-crime algorithms</span>
+              <span class="connection-tag">Behavioral nudging</span>
+              <span class="connection-tag">Access restrictions</span>
+              <span class="connection-tag">Financial friction</span>
+            </div>
+          </div>
+
+          <div class="node endpoint primary" data-id="human-machine">
+            <div class="node-header">
+              <div class="node-icon">⬢</div>
+              <div>
+                <div class="node-title">Human-Machine Merger</div>
+                <div class="node-subtitle">Biological Transformation</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Brain-computer interfaces normalized. Cognitive augmentation required for competitiveness. Baseline humanity becomes "choice" with consequences.
+            </div>
+            <div class="node-quote">
+              "A fusion of technologies blurring the lines between the physical, digital, and biological spheres."
+              <span class="quote-source">— Klaus Schwab</span>
+            </div>
+          </div>
+
+          <div class="node endpoint" data-id="identity-assignable">
+            <div class="node-header">
+              <div class="node-icon">⬢</div>
+              <div>
+                <div class="node-title">Assignable Identity</div>
+                <div class="node-subtitle">Engineered Selfhood</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Predictive models accurate enough, behavioral nudging precise enough — distinction between "who you are" and "who system shaped you to be" disappears.
+            </div>
+          </div>
+
+          <div class="node endpoint" data-id="managed-population">
+            <div class="node-header">
+              <div class="node-icon">⬢</div>
+              <div>
+                <div class="node-title">Managed Population</div>
+                <div class="node-subtitle">"Drugs and Computer Games"</div>
+              </div>
+            </div>
+            <div class="node-description">
+              For those deemed "useless" by economic system: basic income, entertainment, housing — but no agency, no political power, no path to independence.
+            </div>
+          </div>
+
+          <div class="node endpoint" data-id="editable-history">
+            <div class="node-header">
+              <div class="node-icon">⬢</div>
+              <div>
+                <div class="node-title">Editable Reality</div>
+                <div class="node-subtitle">Post-Truth Infrastructure</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Generative AI produces infinite synthetic evidence. When anything can be fabricated, nothing can be proven. Past becomes malleable. Truth becomes consensus.
+            </div>
+          </div>
+
+          <div class="node endpoint" data-id="consent-theater">
+            <div class="node-header">
+              <div class="node-icon">⬢</div>
+              <div>
+                <div class="node-title">Consent as Theater</div>
+                <div class="node-subtitle">Opt-Out Eliminated</div>
+              </div>
+            </div>
+            <div class="node-description">
+              Cannot opt out of infrastructure-level systems. Delete Facebook but facial recognition databases persist. Architecture is ambient, consent is performance.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Matrix -->
+      <div class="connection-matrix">
+        <div class="matrix-title">Key Connection Pathways</div>
+        <div class="matrix-grid">
+          <div class="matrix-cell">
+            <div class="matrix-cell-title">
+              <span style="color: var(--accent-ideology)">●</span>
+              Transhumanism
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-people)">●</span>
+              Nick Bostrom
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-tech)">●</span>
+              OpenAI
+            </div>
+            <div class="matrix-cell-content">
+              Bostrom's Superintelligence directly influenced Musk to co-found OpenAI. Philosophy becomes technology.
+            </div>
+          </div>
+          
+          <div class="matrix-cell">
+            <div class="matrix-cell-title">
+              <span style="color: var(--accent-networks)">●</span>
+              WEF / YGL
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-people)">●</span>
+              Tech CEOs
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-infrastructure)">●</span>
+              Infrastructure
+            </div>
+            <div class="matrix-cell-content">
+              YGL graduates lead companies building Digital ID (Altman/Worldcoin), AI (OpenAI, Google, Meta), surveillance (Palantir).
+            </div>
+          </div>
+          
+          <div class="matrix-cell">
+            <div class="matrix-cell-title">
+              <span style="color: var(--accent-ideology)">●</span>
+              4th Industrial Revolution
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-infrastructure)">●</span>
+              Digital ID
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-endpoint)">●</span>
+              Hackable Humans
+            </div>
+            <div class="matrix-cell-content">
+              Harari: "To hack humans you need computing power + biometric data." Digital ID provides the biometric data. AI provides the computing power.
+            </div>
+          </div>
+          
+          <div class="matrix-cell">
+            <div class="matrix-cell-title">
+              <span style="color: var(--accent-infrastructure)">●</span>
+              CBDCs
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-endpoint)">●</span>
+              Programmable Control
+            </div>
+            <div class="matrix-cell-content">
+              Money with expiration, restrictions, behavioral conditions. Combined with Digital ID = total economic surveillance and control.
+            </div>
+          </div>
+          
+          <div class="matrix-cell">
+            <div class="matrix-cell-title">
+              <span style="color: var(--accent-tech)">●</span>
+              Neuralink
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-endpoint)">●</span>
+              Human-Machine Merger
+            </div>
+            <div class="matrix-cell-content">
+              Brain chips → cognitive augmentation → "baseline humanity as choice" → those who don't augment become uncompetitive.
+            </div>
+          </div>
+          
+          <div class="matrix-cell">
+            <div class="matrix-cell-title">
+              <span style="color: var(--accent-ideology)">●</span>
+              "Useless Class"
+              <span class="matrix-arrow">→</span>
+              <span style="color: var(--accent-endpoint)">●</span>
+              Managed Population
+            </div>
+            <div class="matrix-cell-content">
+              AI automation renders most economically irrelevant. Solution: "drugs and computer games." UBI + entertainment = pacification without agency.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <footer>
+      <div class="footer-text">
+        Every claim documented with primary sources. Read their own words. Verify independently. This map connects: ideology → networks → people → technology → infrastructure → endpoint.
+        <br><br>
+        <strong>Sources:</strong> WEF publications, Davos speeches (archived video), legislation text, corporate filings, YGL database, Bilderberg attendance lists, published books.
+      </div>
+      <div class="footer-cta">
+        What do you believe? And what will you do about it?
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Node expansion on click
+    document.querySelectorAll('.node').forEach(node => {
+      node.addEventListener('click', function() {
+        const wasExpanded = this.classList.contains('expanded');
+        
+        // Collapse all nodes first
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('expanded'));
+        
+        // Expand clicked node if it wasn't already expanded
+        if (!wasExpanded) {
+          this.classList.add('expanded');
+        }
+      });
+    });
+
+    // Legend filtering
+    document.querySelectorAll('.legend-item').forEach(item => {
+      item.addEventListener('click', function() {
+        const filter = this.dataset.filter;
+        const isActive = this.classList.contains('active');
+        
+        // Toggle active state
+        document.querySelectorAll('.legend-item').forEach(i => i.classList.remove('active'));
+        
+        if (!isActive) {
+          this.classList.add('active');
+          
+          // Dim non-matching nodes
+          document.querySelectorAll('.node').forEach(node => {
+            if (node.classList.contains(filter)) {
+              node.style.opacity = '1';
+              node.style.transform = 'scale(1)';
+            } else {
+              node.style.opacity = '0.2';
+              node.style.transform = 'scale(0.95)';
+            }
+          });
+        } else {
+          // Reset all nodes
+          document.querySelectorAll('.node').forEach(node => {
+            node.style.opacity = '1';
+            node.style.transform = 'scale(1)';
+          });
+        }
+      });
+    });
+
+    // Smooth scroll for layers
+    document.querySelectorAll('.layer').forEach(layer => {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+          }
+        });
+      }, { threshold: 0.1 });
+      
+      layer.style.opacity = '0';
+      layer.style.transform = 'translateY(20px)';
+      layer.style.transition = 'all 0.6s ease';
+      observer.observe(layer);
+    });
+  </script>
+</body>
+</html>
