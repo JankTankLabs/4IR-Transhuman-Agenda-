@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Network — Interactive Investigation Database</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0a0b0e;
+      --bg-secondary: #12141a;
+      --bg-tertiary: #1a1d24;
+      --bg-hover: #22262f;
+      --text-primary: #e8e9ed;
+      --text-secondary: #a0a3ad;
+      --text-muted: #6b6f7a;
+      --border: #2a2e38;
+      --people: #f0c846;
+      --people-glow: rgba(240,200,70,0.4);
+      --orgs: #2ecc71;
+      --orgs-glow: rgba(46,204,113,0.4);
+      --tech: #3498db;
+      --tech-glow: rgba(52,152,219,0.4);
+      --infra: #e74c3c;
+      --infra-glow: rgba(231,76,60,0.4);
+      --philosophy: #9b59b6;
+      --philosophy-glow: rgba(155,89,182,0.4);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'IBM Plex Sans', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* Layout */
+    .app-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 380px;
+      grid-template-rows: 60px 1fr;
+      height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      grid-column: 1 / -1;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 20px;
+    }
+
+    .logo {
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .logo span { color: var(--text-muted); font-weight: 400; }
+
+    .search-container {
+      flex: 1;
+      max-width: 400px;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 16px;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--text-muted);
+    }
+
+    .search-input::placeholder { color: var(--text-muted); }
+
+    .filter-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 14px;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .filter-btn.active { border-color: currentColor; }
+    .filter-btn.active.people { color: var(--people); }
+    .filter-btn.active.orgs { color: var(--orgs); }
+    .filter-btn.active.tech { color: var(--tech); }
+    .filter-btn.active.infra { color: var(--infra); }
+    .filter-btn.active.philosophy { color: var(--philosophy); }
+
+    .filter-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .filter-dot.people { background: var(--people); }
+    .filter-dot.orgs { background: var(--orgs); }
+    .filter-dot.tech { background: var(--tech); }
+    .filter-dot.infra { background: var(--infra); }
+    .filter-dot.philosophy { background: var(--philosophy); }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px 0;
+    }
+
+    .sidebar-section {
+      margin-bottom: 24px;
+    }
+
+    .sidebar-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0 16px 8px;
+    }
+
+    .entity-list {
+      list-style: none;
+    }
+
+    .entity-item {
+      padding: 10px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s ease;
+      border-left: 3px solid transparent;
+    }
+
+    .entity-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .entity-item.selected {
+      background: var(--bg-tertiary);
+    }
+
+    .entity-item.selected.people { border-left-color: var(--people); }
+    .entity-item.selected.orgs { border-left-color: var(--orgs); }
+    .entity-item.selected.tech { border-left-color: var(--tech); }
+    .entity-item.selected.infra { border-left-color: var(--infra); }
+    .entity-item.selected.philosophy { border-left-color: var(--philosophy); }
+
+    .entity-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .entity-dot.people { background: var(--people); }
+    .entity-dot.orgs { background: var(--orgs); }
+    .entity-dot.tech { background: var(--tech); }
+    .entity-dot.infra { background: var(--infra); }
+    .entity-dot.philosophy { background: var(--philosophy); }
+
+    .entity-name {
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .entity-tag {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    /* Graph Container */
+    .graph-container {
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    .graph-container svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Graph Nodes */
+    .node {
+      cursor: pointer;
+    }
+
+    .node circle {
+      stroke-width: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .node.people circle { fill: var(--people); stroke: var(--people); }
+    .node.orgs circle { fill: var(--orgs); stroke: var(--orgs); }
+    .node.tech circle { fill: var(--tech); stroke: var(--tech); }
+    .node.infra circle { fill: var(--infra); stroke: var(--infra); }
+    .node.philosophy circle { fill: var(--philosophy); stroke: var(--philosophy); }
+
+    .node:hover circle, .node.selected circle {
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 12px currentColor);
+    }
+
+    .node.people:hover circle, .node.people.selected circle { filter: drop-shadow(0 0 12px var(--people)); }
+    .node.orgs:hover circle, .node.orgs.selected circle { filter: drop-shadow(0 0 12px var(--orgs)); }
+    .node.tech:hover circle, .node.tech.selected circle { filter: drop-shadow(0 0 12px var(--tech)); }
+    .node.infra:hover circle, .node.infra.selected circle { filter: drop-shadow(0 0 12px var(--infra)); }
+    .node.philosophy:hover circle, .node.philosophy.selected circle { filter: drop-shadow(0 0 12px var(--philosophy)); }
+
+    .node.dimmed circle {
+      opacity: 0.15;
+    }
+
+    .node.dimmed text {
+      opacity: 0.15;
+    }
+
+    .node text {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 11px;
+      fill: var(--text-primary);
+      pointer-events: none;
+      text-anchor: middle;
+    }
+
+    /* Graph Links */
+    .link {
+      stroke: var(--border);
+      stroke-opacity: 0.4;
+      stroke-width: 1;
+      fill: none;
+    }
+
+    .link.highlighted {
+      stroke: var(--text-secondary);
+      stroke-opacity: 0.8;
+      stroke-width: 2;
+    }
+
+    .link.dimmed {
+      stroke-opacity: 0.05;
+    }
+
+    /* Detail Panel */
+    .detail-panel {
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .detail-empty {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .detail-empty-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .detail-header {
+      margin-bottom: 24px;
+    }
+
+    .detail-type {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    .detail-type.people { color: var(--people); }
+    .detail-type.orgs { color: var(--orgs); }
+    .detail-type.tech { color: var(--tech); }
+    .detail-type.infra { color: var(--infra); }
+    .detail-type.philosophy { color: var(--philosophy); }
+
+    .detail-name {
+      font-size: 1.5rem;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .detail-subtitle {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    .detail-section {
+      margin-bottom: 24px;
+    }
+
+    .detail-section-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-text {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .detail-list {
+      list-style: none;
+    }
+
+    .detail-list li {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      padding: 6px 0;
+      border-bottom: 1px solid var(--bg-tertiary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .detail-list li:last-child { border-bottom: none; }
+
+    .detail-list-label {
+      color: var(--text-muted);
+    }
+
+    .detail-list-value {
+      color: var(--text-primary);
+      text-align: right;
+    }
+
+    .detail-quote {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-left: 3px solid var(--text-muted);
+    }
+
+    .detail-quote-text {
+      font-size: 0.9rem;
+      font-style: italic;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    .detail-quote-source {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .connection-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .connection-chip {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .connection-chip:hover {
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    .connection-chip-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .connection-chip-dot.people { background: var(--people); }
+    .connection-chip-dot.orgs { background: var(--orgs); }
+    .connection-chip-dot.tech { background: var(--tech); }
+    .connection-chip-dot.infra { background: var(--infra); }
+    .connection-chip-dot.philosophy { background: var(--philosophy); }
+
+    /* Hover tooltip */
+    .tooltip {
+      position: fixed;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      pointer-events: none;
+      z-index: 1000;
+      max-width: 280px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .tooltip.visible { opacity: 1; }
+
+    .tooltip-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .tooltip-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .tooltip-dot.people { background: var(--people); }
+    .tooltip-dot.orgs { background: var(--orgs); }
+    .tooltip-dot.tech { background: var(--tech); }
+    .tooltip-dot.infra { background: var(--infra); }
+    .tooltip-dot.philosophy { background: var(--philosophy); }
+
+    .tooltip-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .tooltip-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .tooltip-connections {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .tooltip-connections strong {
+      color: var(--text-primary);
+    }
+
+    /* Graph controls */
+    .graph-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .graph-control-btn {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 1.2rem;
+      transition: all 0.15s ease;
+    }
+
+    .graph-control-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 20px;
+    }
+
+    .stat-item strong {
+      color: var(--text-primary);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">THE NETWORK <span>/ Trojan Dove Investigation</span></div>
+      <div class="search-container">
+        <input type="text" class="search-input" placeholder="Search people, organizations, tech..." id="searchInput">
+      </div>
+      <div class="filter-buttons">
+        <button class="filter-btn active people" data-filter="people">
+          <span class="filter-dot people"></span> People
+        </button>
+        <button class="filter-btn active orgs" data-filter="orgs">
+          <span class="filter-dot orgs"></span> Organizations
+        </button>
+        <button class="filter-btn active tech" data-filter="tech">
+          <span class="filter-dot tech"></span> Tech
+        </button>
+        <button class="filter-btn active infra" data-filter="infra">
+          <span class="filter-dot infra"></span> Infrastructure
+        </button>
+        <button class="filter-btn active philosophy" data-filter="philosophy">
+          <span class="filter-dot philosophy"></span> Philosophy
+        </button>
+      </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <!-- Graph -->
+    <main class="graph-container" id="graphContainer">
+      <div class="stats-bar" id="statsBar"></div>
+      <div class="graph-controls">
+        <button class="graph-control-btn" id="zoomIn" title="Zoom In">+</button>
+        <button class="graph-control-btn" id="zoomOut" title="Zoom Out">−</button>
+        <button class="graph-control-btn" id="resetView" title="Reset View">⟲</button>
+      </div>
+    </main>
+
+    <!-- Detail Panel -->
+    <aside class="detail-panel" id="detailPanel">
+      <div class="detail-empty">
+        <div class="detail-empty-icon">◉</div>
+        <div>Select any node to view full details</div>
+        <div style="font-size: 0.8rem; margin-top: 8px;">Hover for quick info • Click for full data</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Tooltip -->
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    // ============================================
+    // COMPLETE DATA - ALL ENTITIES AND CONNECTIONS
+    // ============================================
+
+    const entities = {
+      // =========== PEOPLE (Yellow) ===========
+      "klaus-schwab": {
+        id: "klaus-schwab",
+        name: "Klaus Schwab",
+        type: "people",
+        subtitle: "WEF Founder & Executive Chairman",
+        description: "Founded the World Economic Forum in 1971. Author of 'The Fourth Industrial Revolution' (2016) and 'COVID-19: The Great Reset' (2020). Architect of the WEF's current framework and founder of the Young Global Leaders programme.",
+        affiliations: [
+          { label: "World Economic Forum", value: "Founder & Chairman" },
+          { label: "Young Global Leaders", value: "Founder" },
+          { label: "Bilderberg Group", value: "Attendee" }
+        ],
+        quotes: [
+          { text: "The Fourth Industrial Revolution will challenge ideas about what it means to be human.", source: "The Fourth Industrial Revolution (2016)" },
+          { text: "It is characterized by a fusion of technologies that is blurring the lines between the physical, digital, and biological spheres.", source: "The Fourth Industrial Revolution (2016)" },
+          { text: "The pandemic represents a rare but narrow window of opportunity to reflect, reimagine, and reset our world.", source: "COVID-19: The Great Reset (2020)" }
+        ],
+        connections: ["wef", "ygl", "bilderberg", "4ir", "great-reset", "yuval-harari"]
+      },
+      "yuval-harari": {
+        id: "yuval-harari",
+        name: "Yuval Noah Harari",
+        type: "people",
+        subtitle: "Historian / WEF Advisor",
+        description: "Author of Sapiens, Homo Deus, and 21 Lessons for the 21st Century. Primary intellectual voice for WEF's transhumanist framework. Keynote speaker at Davos 2018 and 2020. Articulates the 'hackable humans' concept.",
+        affiliations: [
+          { label: "World Economic Forum", value: "Advisor / Speaker" },
+          { label: "Hebrew University", value: "Professor" }
+        ],
+        quotes: [
+          { text: "We humans should get used to the idea that we are no longer mysterious souls — we are now hackable animals.", source: "Davos 2020" },
+          { text: "To hack a human being you need two things: a lot of computing power and a lot of data, especially biometric data.", source: "Davos 2020" },
+          { text: "What to do with all these useless people? At present, the best guess we have is to keep them happy with drugs and computer games.", source: "Various speeches" }
+        ],
+        connections: ["wef", "klaus-schwab", "hackable-humans", "useless-class", "transhumanism"]
+      },
+      "sam-altman": {
+        id: "sam-altman",
+        name: "Sam Altman",
+        type: "people",
+        subtitle: "OpenAI CEO | YGL 2015",
+        description: "CEO of OpenAI, leading development of artificial general intelligence. Also founder of Worldcoin, a biometric digital ID system using iris scans. Former president of Y Combinator.",
+        affiliations: [
+          { label: "OpenAI", value: "CEO" },
+          { label: "Worldcoin", value: "Founder" },
+          { label: "Y Combinator", value: "Former President" },
+          { label: "Young Global Leaders", value: "Class of 2015" }
+        ],
+        quotes: [
+          { text: "AGI will be developed within the next decade and could be the most transformative technology in human history.", source: "Various interviews" }
+        ],
+        connections: ["ygl", "openai", "worldcoin", "wef", "elon-musk", "peter-thiel"]
+      },
+      "mark-zuckerberg": {
+        id: "mark-zuckerberg",
+        name: "Mark Zuckerberg",
+        type: "people",
+        subtitle: "Meta CEO | YGL 2009",
+        description: "CEO of Meta Platforms. Controls Facebook, Instagram, WhatsApp with 3+ billion users. Massive biometric and behavioral data collection. VR/AR integration through Quest headsets and Ray-Ban Meta glasses.",
+        affiliations: [
+          { label: "Meta Platforms", value: "CEO & Founder" },
+          { label: "Facebook", value: "Founder" },
+          { label: "Young Global Leaders", value: "Class of 2009" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef", "meta", "peter-thiel"]
+      },
+      "sergey-brin": {
+        id: "sergey-brin",
+        name: "Sergey Brin",
+        type: "people",
+        subtitle: "Google Co-founder | YGL 2002",
+        description: "Co-founded Google in 1998. Part of Alphabet's leadership controlling Google Search (92% market share), YouTube, Android, DeepMind AI, and more.",
+        affiliations: [
+          { label: "Alphabet / Google", value: "Co-founder" },
+          { label: "Young Global Leaders", value: "Class of 2002" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef", "google-alphabet", "larry-page"]
+      },
+      "larry-page": {
+        id: "larry-page",
+        name: "Larry Page",
+        type: "people",
+        subtitle: "Google Co-founder | YGL 2005",
+        description: "Co-founded Google in 1998. With Sergey Brin, built the dominant search engine and advertising platform. Controls vast data collection infrastructure.",
+        affiliations: [
+          { label: "Alphabet / Google", value: "Co-founder" },
+          { label: "Young Global Leaders", value: "Class of 2005" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef", "google-alphabet", "sergey-brin"]
+      },
+      "peter-thiel": {
+        id: "peter-thiel",
+        name: "Peter Thiel",
+        type: "people",
+        subtitle: "Palantir Founder | YGL 2007 | Bilderberg Steering",
+        description: "Co-founded PayPal and Palantir Technologies. Member of Bilderberg Steering Committee. Palantir provides predictive analytics to CIA, ICE, and military. Early Facebook investor.",
+        affiliations: [
+          { label: "Palantir Technologies", value: "Co-founder & Chairman" },
+          { label: "Founders Fund", value: "Partner" },
+          { label: "Young Global Leaders", value: "Class of 2007" },
+          { label: "Bilderberg Group", value: "Steering Committee" },
+          { label: "Facebook", value: "Early Investor / Former Board" }
+        ],
+        quotes: [],
+        connections: ["ygl", "bilderberg", "palantir", "wef", "mark-zuckerberg", "elon-musk", "sam-altman"]
+      },
+      "elon-musk": {
+        id: "elon-musk",
+        name: "Elon Musk",
+        type: "people",
+        subtitle: "Neuralink / X / Tesla | YGL 2008 (disputed)",
+        description: "CEO of Tesla, SpaceX, owner of X (Twitter), founder of Neuralink. First human brain chip implanted January 2024. Co-founded OpenAI. Listed as YGL 2008 (disputed). Controls Starlink satellite internet.",
+        affiliations: [
+          { label: "Neuralink", value: "Founder & CEO" },
+          { label: "Tesla", value: "CEO" },
+          { label: "SpaceX", value: "CEO" },
+          { label: "X (Twitter)", value: "Owner" },
+          { label: "OpenAI", value: "Co-founder (departed)" },
+          { label: "Young Global Leaders", value: "2008 (disputed)" }
+        ],
+        quotes: [
+          { text: "The goal of Neuralink is to achieve symbiosis with artificial intelligence.", source: "Various presentations" }
+        ],
+        connections: ["neuralink", "openai", "ygl", "nick-bostrom", "sam-altman", "peter-thiel"]
+      },
+      "nick-bostrom": {
+        id: "nick-bostrom",
+        name: "Nick Bostrom",
+        type: "people",
+        subtitle: "Philosopher / Oxford / Transhumanist",
+        description: "Swedish philosopher at Oxford University. Co-founded World Transhumanist Association (now Humanity+). Director of Future of Humanity Institute. Author of Superintelligence (2014) which influenced Musk to co-found OpenAI.",
+        affiliations: [
+          { label: "Oxford University", value: "Professor" },
+          { label: "Future of Humanity Institute", value: "Director" },
+          { label: "World Transhumanist Association", value: "Co-founder" }
+        ],
+        quotes: [
+          { text: "Transhumanists hope that by responsible use of science, technology, and other rational means we shall eventually manage to become posthuman, beings with vastly greater capacities than present human beings have.", source: "Published writings" }
+        ],
+        connections: ["transhumanism", "openai", "elon-musk", "fhi"]
+      },
+      "katherine-maher": {
+        id: "katherine-maher",
+        name: "Katherine Maher",
+        type: "people",
+        subtitle: "NPR CEO | Former Wikipedia CEO | YGL 2019",
+        description: "Current CEO of NPR (National Public Radio). Former CEO of Wikimedia Foundation (Wikipedia). Member of Council on Foreign Relations. Information gatekeeping across reference and public media.",
+        affiliations: [
+          { label: "NPR", value: "CEO" },
+          { label: "Wikimedia Foundation", value: "Former CEO" },
+          { label: "Young Global Leaders", value: "Class of 2019" },
+          { label: "Council on Foreign Relations", value: "Member" }
+        ],
+        quotes: [],
+        connections: ["ygl", "cfr", "wef"]
+      },
+      "stephane-bancel": {
+        id: "stephane-bancel",
+        name: "Stéphane Bancel",
+        type: "people",
+        subtitle: "Moderna CEO | YGL",
+        description: "CEO of Moderna, Inc. Leading developer of mRNA technology. Young Global Leader graduate.",
+        affiliations: [
+          { label: "Moderna", value: "CEO" },
+          { label: "Young Global Leaders", value: "Graduate" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef", "moderna"]
+      },
+      "emmanuel-macron": {
+        id: "emmanuel-macron",
+        name: "Emmanuel Macron",
+        type: "people",
+        subtitle: "President of France | YGL",
+        description: "President of France since 2017. Former investment banker at Rothschild & Co. Young Global Leader graduate.",
+        affiliations: [
+          { label: "France", value: "President" },
+          { label: "Young Global Leaders", value: "Graduate" },
+          { label: "Rothschild & Co", value: "Former Banker" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef", "eu-digital-id"]
+      },
+      "jacinda-ardern": {
+        id: "jacinda-ardern",
+        name: "Jacinda Ardern",
+        type: "people",
+        subtitle: "Former PM New Zealand | YGL",
+        description: "Former Prime Minister of New Zealand (2017-2023). Implemented some of the strictest COVID policies globally. Young Global Leader graduate.",
+        affiliations: [
+          { label: "New Zealand", value: "Former Prime Minister" },
+          { label: "Young Global Leaders", value: "Graduate" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef"]
+      },
+      "justin-trudeau": {
+        id: "justin-trudeau",
+        name: "Justin Trudeau",
+        type: "people",
+        subtitle: "Prime Minister of Canada | YGL",
+        description: "Prime Minister of Canada since 2015. Young Global Leader graduate. Klaus Schwab has publicly noted that half of Trudeau's cabinet were YGL graduates.",
+        affiliations: [
+          { label: "Canada", value: "Prime Minister" },
+          { label: "Young Global Leaders", value: "Graduate" }
+        ],
+        quotes: [],
+        connections: ["ygl", "wef", "klaus-schwab"]
+      },
+      "bill-gates": {
+        id: "bill-gates",
+        name: "Bill Gates",
+        type: "people",
+        subtitle: "Gates Foundation / Microsoft Founder",
+        description: "Co-founder of Microsoft. Now primarily focused on Gates Foundation which funds global health initiatives, GAVI vaccine alliance, and various technology initiatives. Major Moderna investor.",
+        affiliations: [
+          { label: "Bill & Melinda Gates Foundation", value: "Co-chair" },
+          { label: "Microsoft", value: "Founder" },
+          { label: "GAVI Alliance", value: "Major Funder" },
+          { label: "Moderna", value: "Investor" }
+        ],
+        quotes: [],
+        connections: ["wef", "who", "gavi", "moderna"]
+      },
+      "eric-schmidt": {
+        id: "eric-schmidt",
+        name: "Eric Schmidt",
+        type: "people",
+        subtitle: "Former Google CEO | Bilderberg",
+        description: "Former CEO and Executive Chairman of Google/Alphabet. Bilderberg Group attendee. Defense Innovation Board member. Close ties to US government tech policy.",
+        affiliations: [
+          { label: "Google / Alphabet", value: "Former CEO & Chairman" },
+          { label: "Bilderberg Group", value: "Attendee" },
+          { label: "Defense Innovation Board", value: "Former Chair" }
+        ],
+        quotes: [],
+        connections: ["google-alphabet", "bilderberg", "wef"]
+      },
+
+      // =========== ORGANIZATIONS (Green) ===========
+      "wef": {
+        id: "wef",
+        name: "World Economic Forum",
+        type: "orgs",
+        subtitle: "Founded 1971 | Geneva, Switzerland",
+        description: "International organization for public-private cooperation. 1,000+ member companies. Annual Davos summit brings together heads of state, CEOs, and thought leaders. Sets global policy agenda across government, tech, and finance.",
+        affiliations: [
+          { label: "Founded", value: "1971" },
+          { label: "Headquarters", value: "Geneva, Switzerland" },
+          { label: "Member Companies", value: "1,000+" },
+          { label: "Annual Event", value: "Davos Summit" }
+        ],
+        quotes: [],
+        connections: ["klaus-schwab", "ygl", "global-shapers", "4ir", "great-reset", "yuval-harari", "bilderberg"]
+      },
+      "ygl": {
+        id: "ygl",
+        name: "Young Global Leaders",
+        type: "orgs",
+        subtitle: "WEF Leadership Programme",
+        description: "Five-year programme cultivating future leaders across government, business, media, and civil society. 1,400+ alumni now in positions of power globally. Graduates include heads of state, tech CEOs, and media executives.",
+        affiliations: [
+          { label: "Parent Organization", value: "World Economic Forum" },
+          { label: "Alumni", value: "1,400+" },
+          { label: "Programme Duration", value: "5 years" }
+        ],
+        quotes: [],
+        connections: ["wef", "klaus-schwab", "sam-altman", "mark-zuckerberg", "sergey-brin", "larry-page", "peter-thiel", "elon-musk", "katherine-maher", "stephane-bancel", "emmanuel-macron", "jacinda-ardern", "justin-trudeau"]
+      },
+      "global-shapers": {
+        id: "global-shapers",
+        name: "Global Shapers Community",
+        type: "orgs",
+        subtitle: "WEF Youth Network",
+        description: "Network of young people (under 30) driving change in their communities. 10,000+ members across 450+ city-based hubs. Pipeline for future WEF leadership.",
+        affiliations: [
+          { label: "Parent Organization", value: "World Economic Forum" },
+          { label: "Members", value: "10,000+" },
+          { label: "Hubs", value: "450+ cities" }
+        ],
+        quotes: [],
+        connections: ["wef", "ygl"]
+      },
+      "bilderberg": {
+        id: "bilderberg",
+        name: "Bilderberg Group",
+        type: "orgs",
+        subtitle: "Founded 1954 | Annual Meetings",
+        description: "Annual invitation-only conference bringing together ~130 political leaders, experts from industry, finance, academia, and media. Chatham House rules — no public disclosure of discussions.",
+        affiliations: [
+          { label: "Founded", value: "1954" },
+          { label: "Attendees per meeting", value: "~130" },
+          { label: "Steering Committee", value: "~30 members" }
+        ],
+        quotes: [],
+        connections: ["peter-thiel", "eric-schmidt", "wef", "cfr", "trilateral"]
+      },
+      "cfr": {
+        id: "cfr",
+        name: "Council on Foreign Relations",
+        type: "orgs",
+        subtitle: "Founded 1921 | New York",
+        description: "US foreign policy think tank. 5,000+ members from government, finance, media, and academia. Publishes Foreign Affairs journal. Shapes US foreign policy consensus across administrations.",
+        affiliations: [
+          { label: "Founded", value: "1921" },
+          { label: "Headquarters", value: "New York" },
+          { label: "Members", value: "5,000+" },
+          { label: "Publication", value: "Foreign Affairs" }
+        ],
+        quotes: [],
+        connections: ["bilderberg", "trilateral", "katherine-maher"]
+      },
+      "trilateral": {
+        id: "trilateral",
+        name: "Trilateral Commission",
+        type: "orgs",
+        subtitle: "Founded 1973 | US-EU-Asia",
+        description: "Forum fostering cooperation between North America, Europe, and Asia-Pacific. ~400 members from government, business, academia, and media. Co-founded by David Rockefeller and Zbigniew Brzezinski.",
+        affiliations: [
+          { label: "Founded", value: "1973" },
+          { label: "Members", value: "~400" },
+          { label: "Regions", value: "North America, Europe, Asia-Pacific" }
+        ],
+        quotes: [],
+        connections: ["bilderberg", "cfr", "wef"]
+      },
+      "who": {
+        id: "who",
+        name: "World Health Organization",
+        type: "orgs",
+        subtitle: "UN Health Agency | Global Health Governance",
+        description: "United Nations agency responsible for international public health. International Health Regulations amendments and pandemic preparedness treaties. Digital health certificates and vaccine passports — infrastructure for health-linked digital ID.",
+        affiliations: [
+          { label: "Parent", value: "United Nations" },
+          { label: "Headquarters", value: "Geneva" }
+        ],
+        quotes: [],
+        connections: ["wef", "gavi", "health-passports", "bill-gates"]
+      },
+      "gavi": {
+        id: "gavi",
+        name: "GAVI Alliance",
+        type: "orgs",
+        subtitle: "Global Vaccine Alliance",
+        description: "Public-private global health partnership. Major funders include Gates Foundation, WEF member companies, and governments. Pushing digital vaccine records and ID integration.",
+        affiliations: [
+          { label: "Founded", value: "2000" },
+          { label: "Major Funder", value: "Gates Foundation" }
+        ],
+        quotes: [],
+        connections: ["who", "bill-gates", "wef", "health-passports"]
+      },
+      "fhi": {
+        id: "fhi",
+        name: "Future of Humanity Institute",
+        type: "orgs",
+        subtitle: "Oxford University | AI Safety Research",
+        description: "Multidisciplinary research institute at Oxford University. Focuses on existential risk, AI safety, and future of humanity. Founded and directed by Nick Bostrom.",
+        affiliations: [
+          { label: "University", value: "Oxford" },
+          { label: "Director", value: "Nick Bostrom" }
+        ],
+        quotes: [],
+        connections: ["nick-bostrom", "transhumanism", "openai"]
+      },
+
+      // =========== TECH / COMPANIES (Blue) ===========
+      "openai": {
+        id: "openai",
+        name: "OpenAI",
+        type: "tech",
+        subtitle: "AGI Development | ChatGPT",
+        description: "Leading artificial general intelligence development. ChatGPT has 100M+ users. GPT-4 powers countless applications. Stated goal: 'beneficial AGI.' Co-founded by Elon Musk, now led by Sam Altman. Microsoft invested $10B+.",
+        affiliations: [
+          { label: "CEO", value: "Sam Altman" },
+          { label: "Major Investor", value: "Microsoft ($10B+)" },
+          { label: "Co-founders", value: "Musk, Altman, others" }
+        ],
+        quotes: [],
+        connections: ["sam-altman", "elon-musk", "nick-bostrom", "microsoft"]
+      },
+      "neuralink": {
+        id: "neuralink",
+        name: "Neuralink",
+        type: "tech",
+        subtitle: "Brain-Computer Interface",
+        description: "Developing implantable brain-computer interfaces. First human implant January 2024. Goal: 'symbiosis with AI.' Initial medical applications, long-term vision: cognitive augmentation for healthy humans.",
+        affiliations: [
+          { label: "Founder & CEO", value: "Elon Musk" },
+          { label: "First Human Implant", value: "January 2024" }
+        ],
+        quotes: [],
+        connections: ["elon-musk", "transhumanism", "4ir"]
+      },
+      "palantir": {
+        id: "palantir",
+        name: "Palantir Technologies",
+        type: "tech",
+        subtitle: "Government Surveillance & Predictive Analytics",
+        description: "Data analytics and surveillance platform. Clients include CIA, ICE, US military, UK NHS. Integrates disparate data sources for pattern recognition, prediction, and targeting.",
+        affiliations: [
+          { label: "Co-founder & Chairman", value: "Peter Thiel" },
+          { label: "Government Clients", value: "CIA, ICE, Military" }
+        ],
+        quotes: [],
+        connections: ["peter-thiel", "predictive-control"]
+      },
+      "clearview-ai": {
+        id: "clearview-ai",
+        name: "Clearview AI",
+        type: "tech",
+        subtitle: "Facial Recognition Database",
+        description: "Scraped 30+ billion facial images from the internet. Used by 3,100+ law enforcement agencies. Can identify individuals from any photo. Enables mass facial recognition at scale.",
+        affiliations: [
+          { label: "Image Database", value: "30+ billion" },
+          { label: "Law Enforcement Clients", value: "3,100+" }
+        ],
+        quotes: [],
+        connections: ["biometrics", "surveillance", "predictive-control"]
+      },
+      "google-alphabet": {
+        id: "google-alphabet",
+        name: "Google / Alphabet / DeepMind",
+        type: "tech",
+        subtitle: "Search, AI, Data Collection",
+        description: "92% global search market share. Owns YouTube, Android, DeepMind AI lab. Collects search queries, location history, email content, voice recordings. Primary gatekeeper of information access globally.",
+        affiliations: [
+          { label: "Search Market Share", value: "92%" },
+          { label: "Founders", value: "Brin (YGL 2002), Page (YGL 2005)" },
+          { label: "AI Division", value: "DeepMind" }
+        ],
+        quotes: [],
+        connections: ["sergey-brin", "larry-page", "eric-schmidt", "ygl"]
+      },
+      "meta": {
+        id: "meta",
+        name: "Meta Platforms",
+        type: "tech",
+        subtitle: "Facebook, Instagram, WhatsApp",
+        description: "Controls Facebook, Instagram, WhatsApp with 3+ billion users combined. Massive biometric and behavioral data collection. Facial recognition, social graph mapping. VR/AR integration through Quest and Ray-Ban Meta.",
+        affiliations: [
+          { label: "CEO", value: "Mark Zuckerberg (YGL 2009)" },
+          { label: "Total Users", value: "3+ billion" }
+        ],
+        quotes: [],
+        connections: ["mark-zuckerberg", "peter-thiel", "ygl"]
+      },
+      "worldcoin": {
+        id: "worldcoin",
+        name: "Worldcoin",
+        type: "tech",
+        subtitle: "Iris Biometric ID System",
+        description: "Sam Altman's project. Uses 'Orb' device to scan iris and create unique 'World ID.' Goal: verify humanness in AI age. Cryptocurrency reward for biometric submission. Building global biometric database.",
+        affiliations: [
+          { label: "Founder", value: "Sam Altman" },
+          { label: "Biometric Type", value: "Iris scan" }
+        ],
+        quotes: [],
+        connections: ["sam-altman", "biometrics", "digital-id"]
+      },
+      "moderna": {
+        id: "moderna",
+        name: "Moderna",
+        type: "tech",
+        subtitle: "mRNA Technology Platform",
+        description: "Pioneer of mRNA technology. CEO Stéphane Bancel is YGL graduate. Technology instructs cells to produce specific proteins. Potential for genetic modification at scale beyond vaccines.",
+        affiliations: [
+          { label: "CEO", value: "Stéphane Bancel (YGL)" },
+          { label: "Major Investors", value: "Gates Foundation" }
+        ],
+        quotes: [],
+        connections: ["stephane-bancel", "bill-gates", "ygl"]
+      },
+      "microsoft": {
+        id: "microsoft",
+        name: "Microsoft",
+        type: "tech",
+        subtitle: "Software, Cloud, AI",
+        description: "Major investor in OpenAI ($10B+). Azure cloud powers AI systems. LinkedIn data collection. Windows operating system. GitHub controls code repositories.",
+        affiliations: [
+          { label: "OpenAI Investment", value: "$10B+" },
+          { label: "Founder", value: "Bill Gates" }
+        ],
+        quotes: [],
+        connections: ["bill-gates", "openai", "sam-altman"]
+      },
+      "blackrock": {
+        id: "blackrock",
+        name: "BlackRock / Aladdin",
+        type: "tech",
+        subtitle: "Asset Management & Risk Analytics",
+        description: "World's largest asset manager. Aladdin system manages risk analysis for $21+ trillion (more than US GDP). Proprietary algorithms, opaque decision-making. ESG scoring influence.",
+        affiliations: [
+          { label: "Assets Under Management", value: "$10+ trillion" },
+          { label: "Aladdin Platform", value: "$21+ trillion analyzed" }
+        ],
+        quotes: [],
+        connections: ["wef", "esg-scoring"]
+      },
+
+      // =========== INFRASTRUCTURE (Red) ===========
+      "digital-id": {
+        id: "digital-id",
+        name: "Digital ID Systems",
+        type: "infra",
+        subtitle: "Global Rollout 2024-2026",
+        description: "Universal identification linking all activity to a single profile. EU eIDAS 2.0 mandatory by 2026. Australia Digital ID Act commenced November 2024. UK GOV.UK Wallet launched 2025. India Aadhaar covers 95% of population.",
+        affiliations: [
+          { label: "EU eIDAS 2.0", value: "Mandatory 2026" },
+          { label: "Australia", value: "Commenced Nov 2024" },
+          { label: "UK GOV.UK Wallet", value: "Launched 2025" },
+          { label: "India Aadhaar", value: "1.41 billion enrolled" }
+        ],
+        quotes: [],
+        connections: ["eu-digital-id", "australia-digital-id", "uk-digital-id", "aadhaar", "wef", "worldcoin"]
+      },
+      "eu-digital-id": {
+        id: "eu-digital-id",
+        name: "EU Digital Identity Wallet",
+        type: "infra",
+        subtitle: "eIDAS 2.0 | Mandatory 2026",
+        description: "European Digital Identity Wallet mandated for all EU member states. Links government services, banking, healthcare, travel. Interoperable across all EU countries.",
+        affiliations: [
+          { label: "Legislation", value: "eIDAS 2.0" },
+          { label: "Mandatory Date", value: "2026" },
+          { label: "Coverage", value: "All EU member states" }
+        ],
+        quotes: [],
+        connections: ["digital-id", "emmanuel-macron", "wef"]
+      },
+      "australia-digital-id": {
+        id: "australia-digital-id",
+        name: "Australia Digital ID",
+        type: "infra",
+        subtitle: "Digital ID Act 2024",
+        description: "Australia's national digital identity system. Legislation passed 2024, commenced November 2024. Integrates with myGov, banking, and various services.",
+        affiliations: [
+          { label: "Legislation", value: "Digital ID Act 2024" },
+          { label: "Commenced", value: "November 2024" }
+        ],
+        quotes: [],
+        connections: ["digital-id", "age-verification"]
+      },
+      "uk-digital-id": {
+        id: "uk-digital-id",
+        name: "UK GOV.UK Wallet",
+        type: "infra",
+        subtitle: "Digital Identity UK",
+        description: "UK government digital identity wallet. Launched 2025. Mandatory for employment verification announced. Links to NHS, benefits, licensing.",
+        affiliations: [
+          { label: "Launch", value: "2025" },
+          { label: "Platform", value: "GOV.UK Wallet" }
+        ],
+        quotes: [],
+        connections: ["digital-id", "age-verification"]
+      },
+      "aadhaar": {
+        id: "aadhaar",
+        name: "India Aadhaar",
+        type: "infra",
+        subtitle: "World's Largest Biometric ID System",
+        description: "Indian biometric identification system. 1.41 billion enrolled (95% population). Required for banking, mobile phones, government services. Model for global digital ID systems.",
+        affiliations: [
+          { label: "Enrolled", value: "1.41 billion" },
+          { label: "Coverage", value: "95% of population" }
+        ],
+        quotes: [],
+        connections: ["digital-id", "biometrics"]
+      },
+      "cbdc": {
+        id: "cbdc",
+        name: "Central Bank Digital Currencies",
+        type: "infra",
+        subtitle: "Programmable Money",
+        description: "Digital currencies issued by central banks. Digital Yuan already live in China. Digital Euro and Digital Pound in development. Enables: expiration dates, geographic restrictions, spending category limits, behavioral conditions.",
+        affiliations: [
+          { label: "Digital Yuan", value: "Live (China)" },
+          { label: "Digital Euro", value: "In development" },
+          { label: "Digital Pound", value: "In development" }
+        ],
+        quotes: [
+          { text: "Bank of England discussion papers explicitly mention programmability: money that can be restricted by merchant, location, time, or behavior.", source: "Bank of England CBDC Papers" }
+        ],
+        connections: ["wef", "predictive-control", "social-credit"]
+      },
+      "biometrics": {
+        id: "biometrics",
+        name: "Biometric Verification Systems",
+        type: "infra",
+        subtitle: "Biological Identification",
+        description: "Facial recognition, fingerprints, iris scans, voice patterns, gait analysis. Embedded in smartphones (Face ID), airports, payment systems, building access. Creates permanent identification that cannot be changed or opted out of.",
+        affiliations: [
+          { label: "Types", value: "Face, fingerprint, iris, voice" },
+          { label: "Deployment", value: "Phones, airports, payments" }
+        ],
+        quotes: [],
+        connections: ["clearview-ai", "worldcoin", "digital-id", "hackable-humans"]
+      },
+      "age-verification": {
+        id: "age-verification",
+        name: "Age Verification Laws",
+        type: "infra",
+        subtitle: "\"Protect the Children\" Framework",
+        description: "Australia, UK, EU laws requiring identity verification to access online content. Framed as child protection. Creates infrastructure for universal internet identity verification. UK Online Safety Act, Australia social media ban.",
+        affiliations: [
+          { label: "UK", value: "Online Safety Act 2023" },
+          { label: "Australia", value: "Social Media Ban 2024" },
+          { label: "EU", value: "Digital Services Act" }
+        ],
+        quotes: [],
+        connections: ["digital-id", "uk-digital-id", "australia-digital-id"]
+      },
+      "health-passports": {
+        id: "health-passports",
+        name: "Health Passports / Digital Certificates",
+        type: "infra",
+        subtitle: "Medical Data Integration",
+        description: "COVID vaccine passports established precedent. WHO digital health certificates. Links medical status to identity, access, and movement. CommonPass developed by WEF partnership.",
+        affiliations: [
+          { label: "Precedent", value: "COVID vaccine passports" },
+          { label: "WHO System", value: "Digital health certificates" },
+          { label: "WEF Initiative", value: "CommonPass" }
+        ],
+        quotes: [],
+        connections: ["who", "gavi", "wef", "digital-id"]
+      },
+      "social-credit": {
+        id: "social-credit",
+        name: "Social Credit / ESG Scoring",
+        type: "infra",
+        subtitle: "Behavioral Scoring Systems",
+        description: "China: explicit social credit scores affecting travel, employment, services. West: ESG scores, content moderation, platform access restrictions, financial deplatforming. Rating systems determining access based on behavior.",
+        affiliations: [
+          { label: "China", value: "Social Credit System" },
+          { label: "West", value: "ESG Scores, platform policies" }
+        ],
+        quotes: [],
+        connections: ["cbdc", "predictive-control", "blackrock"]
+      },
+      "esg-scoring": {
+        id: "esg-scoring",
+        name: "ESG Scoring",
+        type: "infra",
+        subtitle: "Environmental, Social, Governance",
+        description: "Rating system for companies and increasingly individuals. Affects access to capital, investment, and services. BlackRock major proponent. Behavioral compliance mechanism.",
+        affiliations: [
+          { label: "Major Proponent", value: "BlackRock" }
+        ],
+        quotes: [],
+        connections: ["blackrock", "social-credit", "wef"]
+      },
+      "surveillance": {
+        id: "surveillance",
+        name: "Surveillance Networks",
+        type: "infra",
+        subtitle: "Always-On Monitoring Infrastructure",
+        description: "Ring doorbell police partnerships (2,000+ departments). Smart home devices (Alexa, Google Home). CCTV integration. Vehicle tracking (ANPR). Cell tower data. Ambient surveillance infrastructure.",
+        affiliations: [
+          { label: "Ring Partnerships", value: "2,000+ police departments" },
+          { label: "Components", value: "Doorbells, speakers, CCTV, ANPR" }
+        ],
+        quotes: [],
+        connections: ["clearview-ai", "palantir", "predictive-control"]
+      },
+      "content-moderation": {
+        id: "content-moderation",
+        name: "Content Moderation Systems",
+        type: "infra",
+        subtitle: "Information Control Infrastructure",
+        description: "Platform policies, government pressure, algorithmic suppression. 'Misinformation' definitions controlled by platforms and government partnerships. Fact-checking networks. Shadow banning. Search suppression.",
+        affiliations: [
+          { label: "Methods", value: "Fact-checks, suppression, bans" }
+        ],
+        quotes: [],
+        connections: ["google-alphabet", "meta", "katherine-maher"]
+      },
+
+      // =========== PHILOSOPHY / CONCEPTS (Purple) ===========
+      "transhumanism": {
+        id: "transhumanism",
+        name: "Transhumanism",
+        type: "philosophy",
+        subtitle: "Core Philosophy",
+        description: "Formal intellectual movement viewing human nature as 'work-in-progress' to be technologically enhanced. Humans need not be evolution's endpoint. Advocates for brain-computer interfaces, genetic engineering, radical life extension.",
+        affiliations: [
+          { label: "Key Text", value: "Transhumanist Declaration (1998)" },
+          { label: "Organization", value: "Humanity+ (formerly WTA)" }
+        ],
+        quotes: [
+          { text: "Transhumanists view human nature as a work-in-progress, a half-baked beginning that we can learn to remold in desirable ways. Current humanity need not be the endpoint of evolution.", source: "The Transhumanist Declaration (1998)" }
+        ],
+        connections: ["nick-bostrom", "4ir", "neuralink", "yuval-harari"]
+      },
+      "4ir": {
+        id: "4ir",
+        name: "Fourth Industrial Revolution",
+        type: "philosophy",
+        subtitle: "WEF Framework",
+        description: "Klaus Schwab's framework describing fusion of physical, digital, and biological spheres. Published 2016, now WEF's operational mandate. Covers AI, robotics, IoT, biotech, nanotech, quantum computing.",
+        affiliations: [
+          { label: "Author", value: "Klaus Schwab" },
+          { label: "Published", value: "2016" }
+        ],
+        quotes: [
+          { text: "It is characterized by a fusion of technologies that is blurring the lines between the physical, digital, and biological spheres.", source: "Klaus Schwab, The Fourth Industrial Revolution (2016)" }
+        ],
+        connections: ["klaus-schwab", "wef", "transhumanism", "neuralink"]
+      },
+      "great-reset": {
+        id: "great-reset",
+        name: "The Great Reset",
+        type: "philosophy",
+        subtitle: "WEF Initiative (2020)",
+        description: "Post-COVID framework for restructuring global economics, governance, and social contracts. 'Build Back Better' implementation vehicle. Published as book by Schwab in July 2020.",
+        affiliations: [
+          { label: "Launched", value: "June 2020" },
+          { label: "Author", value: "Klaus Schwab" }
+        ],
+        quotes: [
+          { text: "The pandemic represents a rare but narrow window of opportunity to reflect, reimagine, and reset our world.", source: "Klaus Schwab, COVID-19: The Great Reset (2020)" }
+        ],
+        connections: ["klaus-schwab", "wef", "4ir"]
+      },
+      "hackable-humans": {
+        id: "hackable-humans",
+        name: "\"Hackable Humans\" Concept",
+        type: "philosophy",
+        subtitle: "Philosophical Framework",
+        description: "Yuval Harari's concept that humans are biological algorithms that can be decoded, predicted, and manipulated through sufficient data and computing power. Requires biometric data + AI processing.",
+        affiliations: [
+          { label: "Articulated by", value: "Yuval Noah Harari" },
+          { label: "Platform", value: "Davos 2020" }
+        ],
+        quotes: [
+          { text: "We humans should get used to the idea that we are no longer mysterious souls — we are now hackable animals.", source: "Yuval Noah Harari, Davos 2020" },
+          { text: "To hack a human being you need two things: a lot of computing power and a lot of data, especially biometric data.", source: "Davos 2020" }
+        ],
+        connections: ["yuval-harari", "wef", "biometrics", "predictive-control"]
+      },
+      "useless-class": {
+        id: "useless-class",
+        name: "\"Useless Class\" Theory",
+        type: "philosophy",
+        subtitle: "Population Framework",
+        description: "Harari's concept that AI automation will render most humans economically and politically irrelevant. Those who fail against irrelevance become 'useless' to the economic system.",
+        affiliations: [
+          { label: "Articulated by", value: "Yuval Noah Harari" }
+        ],
+        quotes: [
+          { text: "What to do with all these useless people? At present, the best guess we have is to keep them happy with drugs and computer games.", source: "Yuval Noah Harari" }
+        ],
+        connections: ["yuval-harari", "wef", "predictive-control"]
+      },
+      "predictive-control": {
+        id: "predictive-control",
+        name: "Predictive Control / Pre-Crime",
+        type: "philosophy",
+        subtitle: "Endpoint Concept",
+        description: "AI predicts behavior before it occurs. Pre-crime policing, risk scores determining access. Dissent modeled and neutralized through nudging before it manifests. Not forbidding rebellion — making it inconvenient and invisible.",
+        affiliations: [
+          { label: "Current Examples", value: "PredPol, Palantir Gotham" }
+        ],
+        quotes: [],
+        connections: ["palantir", "hackable-humans", "cbdc", "social-credit", "surveillance"]
+      }
+    };
+
+    // Build connections array for D3
+    const connections = [];
+    const entityIds = Object.keys(entities);
+
+    entityIds.forEach(id => {
+      const entity = entities[id];
+      if (entity.connections) {
+        entity.connections.forEach(targetId => {
+          if (entities[targetId]) {
+            // Avoid duplicate connections
+            const existing = connections.find(c => 
+              (c.source === id && c.target === targetId) || 
+              (c.source === targetId && c.target === id)
+            );
+            if (!existing) {
+              connections.push({ source: id, target: targetId });
+            }
+          }
+        });
+      }
+    });
+
+    // ============================================
+    // APPLICATION STATE
+    // ============================================
+
+    let selectedEntity = null;
+    let activeFilters = ['people', 'orgs', 'tech', 'infra', 'philosophy'];
+    let searchQuery = '';
+    let simulation, svg, g, link, node, zoom;
+
+    // ============================================
+    // INITIALIZE APPLICATION
+    // ============================================
+
+    function init() {
+      renderSidebar();
+      renderGraph();
+      setupEventListeners();
+      updateStats();
+    }
+
+    // ============================================
+    // SIDEBAR
+    // ============================================
+
+    function renderSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const types = [
+        { key: 'people', label: 'People' },
+        { key: 'orgs', label: 'Organizations' },
+        { key: 'tech', label: 'Technology' },
+        { key: 'infra', label: 'Infrastructure' },
+        { key: 'philosophy', label: 'Philosophy' }
+      ];
+
+      let html = '';
+
+      types.forEach(type => {
+        const items = entityIds
+          .filter(id => entities[id].type === type.key)
+          .filter(id => matchesSearch(entities[id]))
+          .filter(id => activeFilters.includes(entities[id].type))
+          .sort((a, b) => entities[a].name.localeCompare(entities[b].name));
+
+        if (items.length === 0) return;
+
+        html += `<div class="sidebar-section">
+          <div class="sidebar-title">${type.label} (${items.length})</div>
+          <ul class="entity-list">`;
+
+        items.forEach(id => {
+          const e = entities[id];
+          const selected = selectedEntity === id ? 'selected' : '';
+          const tag = e.type === 'people' && e.affiliations?.find(a => a.label === 'Young Global Leaders') ? 'YGL' : '';
+          
+          html += `<li class="entity-item ${e.type} ${selected}" data-id="${id}">
+            <span class="entity-dot ${e.type}"></span>
+            <span class="entity-name">${e.name}</span>
+            ${tag ? `<span class="entity-tag">${tag}</span>` : ''}
+          </li>`;
+        });
+
+        html += `</ul></div>`;
+      });
+
+      sidebar.innerHTML = html;
+
+      // Add click handlers
+      sidebar.querySelectorAll('.entity-item').forEach(item => {
+        item.addEventListener('click', () => selectEntity(item.dataset.id));
+      });
+    }
+
+    function matchesSearch(entity) {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return entity.name.toLowerCase().includes(q) ||
+             entity.subtitle?.toLowerCase().includes(q) ||
+             entity.description?.toLowerCase().includes(q);
+    }
+
+    // ============================================
+    // GRAPH
+    // ============================================
+
+    function renderGraph() {
+      const container = document.getElementById('graphContainer');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      // Clear existing
+      d3.select('#graphContainer svg').remove();
+
+      svg = d3.select('#graphContainer')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      // Zoom behavior
+      zoom = d3.zoom()
+        .scaleExtent([0.2, 4])
+        .on('zoom', (event) => {
+          g.attr('transform', event.transform);
+        });
+
+      svg.call(zoom);
+
+      g = svg.append('g');
+
+      // Filter data
+      const visibleNodes = entityIds
+        .filter(id => activeFilters.includes(entities[id].type))
+        .filter(id => matchesSearch(entities[id]))
+        .map(id => ({ id, ...entities[id] }));
+
+      const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+
+      const visibleLinks = connections.filter(c => 
+        visibleNodeIds.has(c.source) && visibleNodeIds.has(c.target)
+      );
+
+      // Simulation
+      simulation = d3.forceSimulation(visibleNodes)
+        .force('link', d3.forceLink(visibleLinks).id(d => d.id).distance(120))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(50));
+
+      // Links
+      link = g.append('g')
+        .selectAll('line')
+        .data(visibleLinks)
+        .join('line')
+        .attr('class', 'link');
+
+      // Nodes
+      node = g.append('g')
+        .selectAll('g')
+        .data(visibleNodes)
+        .join('g')
+        .attr('class', d => `node ${d.type}`)
+        .call(d3.drag()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended));
+
+      node.append('circle')
+        .attr('r', d => d.type === 'people' ? 12 : 14);
+
+      node.append('text')
+        .attr('dy', 28)
+        .text(d => d.name.length > 18 ? d.name.substring(0, 16) + '...' : d.name);
+
+      // Events
+      node.on('mouseover', showTooltip)
+          .on('mousemove', moveTooltip)
+          .on('mouseout', hideTooltip)
+          .on('click', (event, d) => selectEntity(d.id));
+
+      // Tick
+      simulation.on('tick', () => {
+        link
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y);
+
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+      });
+    }
+
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+
+    // ============================================
+    // TOOLTIP
+    // ============================================
+
+    function showTooltip(event, d) {
+      const tooltip = document.getElementById('tooltip');
+      const connectedCount = (d.connections || []).filter(c => entities[c]).length;
+
+      tooltip.innerHTML = `
+        <div class="tooltip-header">
+          <span class="tooltip-dot ${d.type}"></span>
+          <span class="tooltip-name">${d.name}</span>
+        </div>
+        <div class="tooltip-subtitle">${d.subtitle || ''}</div>
+        <div class="tooltip-connections"><strong>${connectedCount}</strong> connections</div>
+      `;
+
+      tooltip.classList.add('visible');
+      moveTooltip(event);
+
+      // Highlight connected
+      highlightConnections(d.id);
+    }
+
+    function moveTooltip(event) {
+      const tooltip = document.getElementById('tooltip');
+      tooltip.style.left = (event.clientX + 15) + 'px';
+      tooltip.style.top = (event.clientY + 15) + 'px';
+    }
+
+    function hideTooltip() {
+      document.getElementById('tooltip').classList.remove('visible');
+      clearHighlights();
+    }
+
+    function highlightConnections(entityId) {
+      const entity = entities[entityId];
+      const connectedIds = new Set(entity.connections || []);
+      connectedIds.add(entityId);
+
+      node.classed('dimmed', d => !connectedIds.has(d.id));
+      link.classed('dimmed', d => d.source.id !== entityId && d.target.id !== entityId);
+      link.classed('highlighted', d => d.source.id === entityId || d.target.id === entityId);
+    }
+
+    function clearHighlights() {
+      node.classed('dimmed', false);
+      link.classed('dimmed', false).classed('highlighted', false);
+    }
+
+    // ============================================
+    // DETAIL PANEL
+    // ============================================
+
+    function selectEntity(id) {
+      selectedEntity = id;
+      const entity = entities[id];
+
+      // Update sidebar selection
+      document.querySelectorAll('.entity-item').forEach(item => {
+        item.classList.toggle('selected', item.dataset.id === id);
+      });
+
+      // Update graph selection
+      node.classed('selected', d => d.id === id);
+
+      // Render detail panel
+      const panel = document.getElementById('detailPanel');
+      
+      let html = `
+        <div class="detail-header">
+          <div class="detail-type ${entity.type}">${entity.type}</div>
+          <div class="detail-name">${entity.name}</div>
+          <div class="detail-subtitle">${entity.subtitle || ''}</div>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">Overview</div>
+          <div class="detail-text">${entity.description || 'No description available.'}</div>
+        </div>
+      `;
+
+      if (entity.affiliations && entity.affiliations.length) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">Affiliations & Data</div>
+            <ul class="detail-list">
+              ${entity.affiliations.map(a => `
+                <li>
+                  <span class="detail-list-label">${a.label}</span>
+                  <span class="detail-list-value">${a.value}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      if (entity.quotes && entity.quotes.length) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">Key Quotes</div>
+            ${entity.quotes.map(q => `
+              <div class="detail-quote">
+                <div class="detail-quote-text">"${q.text}"</div>
+                <div class="detail-quote-source">— ${q.source}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      if (entity.connections && entity.connections.length) {
+        const validConnections = entity.connections.filter(c => entities[c]);
+        if (validConnections.length) {
+          html += `
+            <div class="detail-section">
+              <div class="detail-section-title">Connections (${validConnections.length})</div>
+              <div class="connection-chips">
+                ${validConnections.map(c => {
+                  const conn = entities[c];
+                  return `<div class="connection-chip" data-id="${c}">
+                    <span class="connection-chip-dot ${conn.type}"></span>
+                    ${conn.name}
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      panel.innerHTML = html;
+
+      // Add click handlers to connection chips
+      panel.querySelectorAll('.connection-chip').forEach(chip => {
+        chip.addEventListener('click', () => selectEntity(chip.dataset.id));
+      });
+    }
+
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
+
+    function setupEventListeners() {
+      // Search
+      document.getElementById('searchInput').addEventListener('input', (e) => {
+        searchQuery = e.target.value;
+        renderSidebar();
+        renderGraph();
+        updateStats();
+      });
+
+      // Filters
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const filter = btn.dataset.filter;
+          btn.classList.toggle('active');
+          
+          if (activeFilters.includes(filter)) {
+            activeFilters = activeFilters.filter(f => f !== filter);
+          } else {
+            activeFilters.push(filter);
+          }
+
+          renderSidebar();
+          renderGraph();
+          updateStats();
+        });
+      });
+
+      // Zoom controls
+      document.getElementById('zoomIn').addEventListener('click', () => {
+        svg.transition().call(zoom.scaleBy, 1.3);
+      });
+
+      document.getElementById('zoomOut').addEventListener('click', () => {
+        svg.transition().call(zoom.scaleBy, 0.7);
+      });
+
+      document.getElementById('resetView').addEventListener('click', () => {
+        svg.transition().call(zoom.transform, d3.zoomIdentity);
+      });
+
+      // Resize
+      window.addEventListener('resize', () => {
+        renderGraph();
+      });
+    }
+
+    // ============================================
+    // STATS
+    // ============================================
+
+    function updateStats() {
+      const visible = entityIds.filter(id => 
+        activeFilters.includes(entities[id].type) && matchesSearch(entities[id])
+      );
+
+      const people = visible.filter(id => entities[id].type === 'people').length;
+      const orgs = visible.filter(id => entities[id].type === 'orgs').length;
+      const tech = visible.filter(id => entities[id].type === 'tech').length;
+
+      document.getElementById('statsBar').innerHTML = `
+        <div class="stat-item"><strong>${visible.length}</strong> entities</div>
+        <div class="stat-item"><strong>${people}</strong> people</div>
+        <div class="stat-item"><strong>${orgs}</strong> organizations</div>
+        <div class="stat-item"><strong>${tech}</strong> tech</div>
+        <div class="stat-item"><strong>${connections.length}</strong> connections</div>
+      `;
+    }
+
+    // ============================================
+    // LAUNCH
+    // ============================================
+
+    init();
+  </script>
+</body>
+</html>
